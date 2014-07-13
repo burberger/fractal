@@ -29,15 +29,18 @@ function find_color(x, y, width, height, max_iter)
   if iter <= max_iter/2-1 then
     r = color
     g, b = 0, 0
-  else
+  elseif iter < max_iter then
     r = 255
     g, b = color, color
+  else
+    r, g, b = 0, 0, 0
   end
 
   return imlib.color.new(r, g, b)
 end
 
 function make_img(width, height, max_iter)
+  imlib.set_anti_alias(false)
   local data = imlib.image.new(width, height)
   print("Rendering image...")
   for i = 0, width-1 do
@@ -50,8 +53,8 @@ function make_img(width, height, max_iter)
 end
 
 function main()
-  img = make_img(500, 500, 1000)
-  img:save("fractal.png")
+  img = make_img(2000, 2000, 50)
+  img:save("fractal_noaa.png")
 end
 
 main()

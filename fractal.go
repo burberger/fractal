@@ -8,17 +8,22 @@ import (
 	"image/png"
 	"math"
 	"math/cmplx"
-  "runtime"
 	"os"
+	"runtime"
+	"sync"
 )
 
-func find_color(x int, y int, width int, height int, max_iter int, julia_seed complex128, img *image.RGBA) {
+func find_color(x int, y int, width int, height int, max_iter int, julia_seed complex128, img *image.RGBA, wg *sync.WaitGroup) {
+	//Define the boundary of the complex plane to view
 	minRe := -0.7
 	maxRe := -0.71
 	minIm := -0.719
+	//Define the maximum boundary based on the size of the picture to maintain aspect ratio
 	maxIm := minIm + (maxRe-minRe)*float64(height)/float64(width)
+	//Create the scaling factor that translates pixel steps to coordinate system steps
 	re_factor := (maxRe - minRe) / float64(width-1)
 	im_factor := (maxIm - minIm) / float64(height-1)
+	//Compute the location of the current pixel
 	c_re := minRe + float64(x)*re_factor
 	c_im := maxIm - float64(y)*im_factor
 
@@ -64,10 +69,11 @@ func find_color(x int, y int, width int, height int, max_iter int, julia_seed co
 		pixel = color.RGBA{0, 0, 0, 255}
 	}
 	img.Set(x, y, pixel)
+	wg.Done()
 }
 
 func main() {
-  runtime.GOMAXPROCS(runtime.NumCPU())
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	w := flag.Int("width", 400, "Width of generated image in pixels")
 	h := flag.Int("height", 400, "Height of generated image in pixels")
 	m := flag.Int("iter", 100, "Maximum number of iterations per pixel")
@@ -81,14 +87,19 @@ func main() {
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 
 	fmt.Println("Starting render...")
+
+	var wg sync.WaitGroup
+  wg.Add(width*height)
 	for i := 0; i < width; i++ {
 		if i%100 == 0 {
 			fmt.Printf("\rProgress: %d", i)
 		}
 		for j := 0; j < height; j++ {
-			find_color(i, j, width, height, max_iter, seed, img)
+      go find_color(i, j, width, height, max_iter, seed, img, &wg)
 		}
 	}
+
+	wg.Wait()
 
 	output, err := os.Create(*out + ".png")
 	defer output.Close()

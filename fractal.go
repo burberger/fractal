@@ -10,14 +10,15 @@ import (
 	"math/cmplx"
 	"os"
 	"runtime"
+	"sync"
 )
 
-func find_color(point_queue chan image.Point, width int, height int, max_iter int, julia_seed complex128, img *image.RGBA) {
+func find_color(point_queue chan image.Point, width int, height int, max_iter int, julia_seed complex128, img *image.RGBA, wg *sync.WaitGroup) {
 	for point := range point_queue {
 		//Define the boundary of the complex plane to view
-		minRe := -0.7
-		maxRe := -0.71
-		minIm := -0.719
+		minRe := -0.69777
+		maxRe := -0.834999
+		minIm := -0.05
 		//Define the maximum boundary based on the size of the picture to maintain aspect ratio
 		maxIm := minIm + (maxRe-minRe)*float64(height)/float64(width)
 		//Create the scaling factor that translates pixel steps to coordinate system steps
@@ -28,7 +29,7 @@ func find_color(point_queue chan image.Point, width int, height int, max_iter in
 		c_im := maxIm - float64(point.Y)*im_factor
 
 		z := complex(c_re, c_im)
-		c := julia_seed
+		c := z
 
 		var iter int
 		for i := 0; i <= max_iter && cmplx.Abs(z) < 4; i++ {
@@ -70,6 +71,7 @@ func find_color(point_queue chan image.Point, width int, height int, max_iter in
 		}
 		img.Set(point.X, point.Y, pixel)
 	}
+	wg.Done()
 }
 
 func main() {
@@ -87,10 +89,14 @@ func main() {
 	seed := complex(-0.156844471694257101941, -0.649707745759247905171)
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 
+	//Create waitgroup, add a count for each processor
+	var wg sync.WaitGroup
+	wg.Add(num_cpu)
+
 	point_queue := make([]chan image.Point, num_cpu)
 	for i := range point_queue {
-		point_queue[i] = make(chan image.Point)
-		go find_color(point_queue[i], width, height, max_iter, seed, img)
+		point_queue[i] = make(chan image.Point, 500)
+		go find_color(point_queue[i], width, height, max_iter, seed, img, &wg)
 	}
 
 	thread_count := 0
@@ -107,9 +113,11 @@ func main() {
 		}
 	}
 
+	//Close all send queues, wait for goroutines to return
 	for i := range point_queue {
 		close(point_queue[i])
 	}
+	wg.Wait()
 
 	output, err := os.Create(*out + ".png")
 	defer output.Close()
